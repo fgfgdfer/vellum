@@ -7,7 +7,8 @@ const crypto = require('crypto');
 const initSqlJs = require('sql.js');
 
 app.setName('Vellum');
-if (!app.requestSingleInstanceLock()) { app.quit(); }
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) { app.quit(); process.exit(0); }
 
 let win = null;
 let db = null;
@@ -22,19 +23,47 @@ async function openDb() {
   const dir = app.getPath('userData');
   fs.mkdirSync(dir, { recursive: true });
   dbPath = path.join(dir, 'vellum.db');
-  db = fs.existsSync(dbPath) ? new SQL.Database(fs.readFileSync(dbPath)) : new SQL.Database();
+  db = null;
+  if (fs.existsSync(dbPath)) {
+    try { db = new SQL.Database(fs.readFileSync(dbPath)); db.exec('SELECT count(*) FROM sqlite_master'); }
+    catch (e) { // damaged database: keep it aside and restore the newest backup
+      try { fs.copyFileSync(dbPath, dbPath + '.damaged-' + Date.now()); } catch (_) {}
+      db = null;
+      const bdir = path.join(dir, 'backups');
+      const last = fs.existsSync(bdir) ? fs.readdirSync(bdir).filter(f => f.endsWith('.db')).sort().pop() : null;
+      if (last) { try { db = new SQL.Database(fs.readFileSync(path.join(bdir, last))); } catch (_) { db = null; } }
+    }
+  }
+  if (!db) db = new SQL.Database();
   db.run(`CREATE TABLE IF NOT EXISTS files(id TEXT PRIMARY KEY, name TEXT, updated INTEGER, created INTEGER, folder TEXT, star INTEGER, trashed INTEGER, thumb TEXT, json TEXT);
           CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);`);
   writeNow();
   dailyBackup();
 }
-function persist() { clearTimeout(saveTimer); saveTimer = setTimeout(writeNow, 250); }
+let waiters = [];
+// Resolves only after the data is on disk, so the app never reports "saved" too early.
+function persist() {
+  clearTimeout(saveTimer);
+  const p = new Promise((res, rej) => waiters.push({ res, rej }));
+  saveTimer = setTimeout(() => { try { writeNow(); } catch (e) { /* reported through the waiters */ } }, 250);
+  return p;
+}
 function writeNow() {
   clearTimeout(saveTimer);
-  if (!db) return;
-  const tmp = dbPath + '.tmp';
-  fs.writeFileSync(tmp, Buffer.from(db.export()));
-  fs.renameSync(tmp, dbPath); // atomic replace: a crash never leaves a half-written database
+  const ws = waiters; waiters = [];
+  if (!db) { ws.forEach(w => w.res(true)); return; }
+  try {
+    const tmp = dbPath + '.tmp';
+    const fd = fs.openSync(tmp, 'w');
+    fs.writeSync(fd, Buffer.from(db.export()));
+    fs.fsyncSync(fd); fs.closeSync(fd);
+    fs.renameSync(tmp, dbPath); // atomic replace: a crash never leaves a half-written database
+    ws.forEach(w => w.res(true));
+  } catch (e) {
+    console.error('save failed', e);
+    ws.forEach(w => w.rej(e));
+    throw e;
+  }
 }
 function dailyBackup() {
   try {
@@ -61,11 +90,11 @@ ipcMain.handle('db:load', (e, id) => (rows('SELECT json FROM files WHERE id=?', 
 ipcMain.handle('db:save', (e, id, json, rec) => {
   db.run('INSERT OR REPLACE INTO files(id,name,updated,created,folder,star,trashed,thumb,json) VALUES(?,?,?,?,?,?,?,?,?)',
     [String(id), String(rec.name || 'Untitled'), +rec.updated || Date.now(), +rec.created || Date.now(), rec.folder || null, rec.star ? 1 : 0, rec.trashed ? 1 : 0, String(rec.thumb || ''), String(json)]);
-  persist(); return true;
+  return persist();
 });
-ipcMain.handle('db:remove', (e, id) => { db.run('DELETE FROM files WHERE id=?', [String(id)]); persist(); return true; });
+ipcMain.handle('db:remove', (e, id) => { db.run('DELETE FROM files WHERE id=?', [String(id)]); return persist(); });
 ipcMain.handle('db:getFolders', () => { const r = rows("SELECT value FROM meta WHERE key='folders'")[0]; try { return r ? JSON.parse(r.value) : []; } catch (e) { return []; } });
-ipcMain.handle('db:setFolders', (e, list) => { db.run("INSERT OR REPLACE INTO meta(key,value) VALUES('folders',?)", [JSON.stringify(list || [])]); persist(); return true; });
+ipcMain.handle('db:setFolders', (e, list) => { db.run("INSERT OR REPLACE INTO meta(key,value) VALUES('folders',?)", [JSON.stringify(list || [])]); return persist(); });
 ipcMain.handle('db:flush', () => { writeNow(); return true; });
 
 /* ---------- files, fonts, Claude connection ---------- */
@@ -111,7 +140,8 @@ function startCommandPort() {
   const token = crypto.randomBytes(24).toString('hex');
   const server = http.createServer((req, res) => {
     const send = (code, obj) => { res.writeHead(code, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
-    if (req.headers['x-vellum-token'] !== token) return send(401, { error: 'unauthorized' });
+    const got = Buffer.from(String(req.headers['x-vellum-token'] || '')), want = Buffer.from(token);
+    if (got.length !== want.length || !crypto.timingSafeEqual(got, want)) return send(401, { error: 'unauthorized' });
     if (req.method !== 'POST' || req.url !== '/cmd') return send(404, { error: 'not found' });
     let body = '';
     req.on('data', c => { body += c; if (body.length > 20e6) req.destroy(); });
@@ -127,7 +157,7 @@ function startCommandPort() {
   });
   server.listen(0, '127.0.0.1', () => {
     const port = server.address().port;
-    fs.writeFileSync(path.join(app.getPath('userData'), 'mcp.json'), JSON.stringify({ port, token, pid: process.pid }));
+    fs.writeFileSync(path.join(app.getPath('userData'), 'mcp.json'), JSON.stringify({ port, token, pid: process.pid }), { mode: 0o600 });
   });
 }
 ipcMain.on('vellum-cmd-result', (e, r) => { const f = pending.get(r.id); if (f) { pending.delete(r.id); f(r); } });
@@ -136,15 +166,17 @@ ipcMain.on('vellum-cmd-result', (e, r) => { const f = pending.get(r.id); if (f) 
 function createWindow() {
   win = new BrowserWindow({
     width: 1440, height: 900, minWidth: 900, minHeight: 600, title: 'Vellum', backgroundColor: '#1e1e1e', autoHideMenuBar: true,
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, spellcheck: true }
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: true }
   });
   win.loadFile(path.join(__dirname, 'app', 'index.html'));
+  // the window only ever shows the editor: links open in the browser, dropped files never replace the page
+  win.webContents.on('will-navigate', (e, url) => { e.preventDefault(); if (/^https?:/.test(url)) shell.openExternal(url); });
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; });
   win.on('close', e => {
     if (closing) return;
     e.preventDefault();
-    win.webContents.executeJavaScript('window.__vellumFlush ? window.__vellumFlush() : null', true)
-      .catch(() => {}).finally(() => { closing = true; writeNow(); win.close(); });
+    const flush = win.webContents.executeJavaScript('window.__vellumFlush ? window.__vellumFlush() : null', true).catch(() => {});
+    Promise.race([flush, new Promise(r => setTimeout(r, 3000))]).finally(() => { closing = true; try { writeNow(); } catch (e) {} win.close(); });
   });
 }
 app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
@@ -156,4 +188,4 @@ app.whenReady().then(async () => {
   startCommandPort();
   createWindow();
 });
-app.on('window-all-closed', () => { writeNow(); app.quit(); });
+app.on('window-all-closed', () => { try { writeNow(); } catch (e) {} app.quit(); });
