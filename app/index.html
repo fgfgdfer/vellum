@@ -697,7 +697,7 @@ function dock(){const sh=SHAPES.find(s=>s[0]===UI.shape)||SHAPES[0];const on=k=>
   <button class="ai ${UI.ai?'on':''}" data-act="ai" title="Ask Claude about the selection (Ctrl+J)" aria-label="Claude">${ic('ai')}<span>Claude</span></button>
   <span class="sep"></span>
   <button class="dev ${UI.dev?'on':''}" data-act="dev" title="Dev Mode (Shift+D)" aria-label="Dev Mode">${ic('dev')}</button>`}
-let dockIO=null;try{dockIO=new IntersectionObserver(es=>es.forEach(en=>{if(en.boundingClientRect.width>0&&en.intersectionRatio<.98){$('#dock').classList.add('top');document.body.classList.add('docktop')}}),{threshold:[0,.25,.5,.75,.98,1]})}catch(e){}
+let dockIO=null;
 function checkDock(){if(!dockIO)return;const d=$('#dock');dockIO.unobserve(d);requestAnimationFrame(()=>dockIO.observe(d))}
 $('#dock').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;e.stopPropagation();
   if(b.dataset.tool){setTool(b.dataset.tool);return}
