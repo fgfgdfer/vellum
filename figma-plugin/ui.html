@@ -1,0 +1,54 @@
+<style>
+  body { font: 12px/1.5 Inter, system-ui, sans-serif; margin: 0; padding: 16px; color: var(--figma-color-text, #1e1e1e); background: var(--figma-color-bg, #fff); }
+  h1 { font-size: 14px; margin: 0 0 4px; }
+  p { margin: 0 0 12px; color: var(--figma-color-text-secondary, #666); }
+  label { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+  button { font: inherit; border-radius: 6px; padding: 8px 12px; border: 1px solid var(--figma-color-border, #e6e6e6); background: var(--figma-color-bg, #fff); color: inherit; cursor: pointer; }
+  .pri { background: #0a7cd6; border-color: #0a7cd6; color: #fff; font-weight: 600; width: 100%; margin-top: 8px; }
+  #status { margin-top: 12px; white-space: pre-wrap; }
+  ul { padding-left: 18px; margin: 6px 0; color: var(--figma-color-text-secondary, #666); }
+  .row { display: flex; gap: 8px; margin-top: 10px; }
+  .row button { flex: 1; }
+</style>
+<h1>Export to Vellum</h1>
+<p>Creates a Vellum file with pages, layers, auto layout, components and instances, color variables (light/dark), text styles, effects, images, vectors and prototype links.</p>
+<label><input type="radio" name="scope" value="file" checked> Whole file (all pages)</label>
+<label><input type="radio" name="scope" value="page"> Current page</label>
+<label><input type="radio" name="scope" value="selection"> Selected layers</label>
+<button class="pri" id="go">Export</button>
+<div id="status" role="status"></div>
+<div class="row" id="after" hidden><button id="save">Save .vellum.json</button><button id="copy">Copy</button></div>
+<script>
+  let result = null;
+  document.getElementById('go').onclick = () => {
+    const scope = document.querySelector('input[name=scope]:checked').value;
+    document.getElementById('status').textContent = 'Starting…';
+    document.getElementById('after').hidden = true;
+    parent.postMessage({ pluginMessage: { type: 'export', scope } }, '*');
+  };
+  document.getElementById('save').onclick = () => {
+    const blob = new Blob([result.json], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = (result.name || 'figma-file').replace(/[\\/:*?"<>|]/g, '_') + '.vellum.json';
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+  document.getElementById('copy').onclick = async () => {
+    try { await navigator.clipboard.writeText(result.json); document.getElementById('status').textContent += '\nCopied. In Vellum: Import → paste.'; }
+    catch (e) { const t = document.createElement('textarea'); t.value = result.json; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); document.getElementById('status').textContent += '\nCopied.'; }
+  };
+  onmessage = e => {
+    const m = e.data.pluginMessage; if (!m) return;
+    const st = document.getElementById('status');
+    if (m.type === 'progress') st.textContent = m.text;
+    if (m.type === 'error') st.textContent = 'Export failed: ' + m.text;
+    if (m.type === 'done') {
+      result = m;
+      st.innerHTML = '';
+      const s = m.stats;
+      st.textContent = `Done: ${s.nodes} layers, ${s.components} components, ${s.instances} instances, ${s.images} images, ${m.variables} color variables, ${m.textStyles} text styles (${m.sizeMB} MB).\nIn Vellum: Import file… and choose the saved file.`;
+      if (m.warnings.length) { const ul = document.createElement('ul'); m.warnings.forEach(w => { const li = document.createElement('li'); li.textContent = w; ul.appendChild(li); }); st.appendChild(ul); }
+      document.getElementById('after').hidden = false;
+    }
+  };
+</script>
