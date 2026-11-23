@@ -1,7 +1,7 @@
 {
   "name": "vellum",
   "productName": "Vellum",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Vellum: interface design editor",
   "main": "main.js",
   "license": "UNLICENSED",

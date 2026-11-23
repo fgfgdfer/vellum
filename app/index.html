@@ -185,6 +185,13 @@ body.docktop #toast{bottom:auto;top:64px}
 #aip{display:flex;flex-direction:column;height:100%;min-height:0;background:var(--panel)}
 #layers:has(#aip){display:flex;flex-direction:column;padding:0;overflow:hidden}
 #aip .quick{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}#aip .quick button{flex:none;white-space:nowrap}
+/* Figma-style switches for on/off options in the right panel (instead of plain checkboxes) */
+#rbody label.row:has(input[type=checkbox]){gap:8px;min-height:24px;cursor:pointer;font-size:12px;color:var(--fg)}
+#rbody input[type=checkbox]{-webkit-appearance:none;appearance:none;position:relative;width:26px;height:15px;border-radius:999px;background:var(--line);border:0;margin:0;flex:none;cursor:pointer;transition:background .15s}
+#rbody input[type=checkbox]::after{content:'';position:absolute;top:2px;left:2px;width:11px;height:11px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+#rbody input[type=checkbox]:checked{background:var(--accent)}
+#rbody input[type=checkbox]:checked::after{transform:translateX(11px)}
+#rbody input[type=checkbox]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #aip header{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);font-weight:600;font-size:12px}
 .aimark{width:18px;height:18px;border-radius:5px;background:linear-gradient(135deg,#d97757,#a259ff);display:grid;place-items:center;color:#fff;font-size:11px}
 #aimsgs{flex:1;overflow:auto;padding:12px;display:grid;gap:10px;align-content:start}
@@ -641,7 +648,7 @@ stage.addEventListener('dblclick',ev=>{
   if(n.type==='path'){UI.editPts=n.id;UI.sel=[n.id];drawOv();toast('Editing points. Drag points or handles. Esc to finish');return}
   if(FRAMEY(n.type)&&n.children.length){const inner=N(el.dataset.id);if(inner&&inner!==n)select([inner.id])}
 });
-stage.addEventListener('wheel',e=>{if(e.target.closest('#aip'))return;e.preventDefault();if(e.ctrlKey||e.metaKey){const b=stage.getBoundingClientRect();zoomAt(UI.z*Math.exp(-e.deltaY*.01),e.clientX-b.left,e.clientY-b.top)}else{UI.px-=e.shiftKey?e.deltaY:e.deltaX;UI.py-=e.shiftKey?0:e.deltaY;render()}},{passive:false});
+stage.addEventListener('wheel',e=>{if(e.target.closest('#aip'))return;e.preventDefault();if(e.ctrlKey||e.metaKey){const b=stage.getBoundingClientRect();const dy=Math.max(-60,Math.min(60,e.deltaMode===1?e.deltaY*16:e.deltaY));zoomAt(UI.z*Math.exp(-dy*.0028),e.clientX-b.left,e.clientY-b.top)}else{UI.px-=e.shiftKey?e.deltaY:e.deltaX;UI.py-=e.shiftKey?0:e.deltaY;render()}},{passive:false});
 function toggleRulers(){UI.rulers=!UI.rulers;LS.set('cs-rulers',UI.rulers?'1':'0');drawOv();toast(UI.rulers?'Rulers on · drag from a ruler to add a guide':'Rulers off')}
 function zoomAt(z,mx,my){z=Math.min(256,Math.max(.02,z));const wx=(mx-UI.px)/UI.z,wy=(my-UI.py)/UI.z;UI.z=z;UI.px=mx-wx*z;UI.py=my-wy*z;render()}
 function zoomCenter(f){const r=stage.getBoundingClientRect();zoomAt(f(UI.z),r.width/2,r.height/2)}
@@ -1038,7 +1045,7 @@ function panel(){if(!D)return;document.querySelectorAll('[data-rt]').forEach(b=>
     ${p&&p.auto&&p.auto.on?`${chk('absPos',n.absPos,'Ignore auto layout (absolute position)')}`:''}</div>`;
   const A=n.auto||{};
   h+=`<div class="sec"><h4>${FRAMEY(t)?'Auto layout':'Layout'}${FRAMEY(t)?addBtn('auto',A.on):''}</h4><div class="g2">${num('w','W',n.w)}${num('h','H',n.h)}</div>
-    ${p&&p.auto&&p.auto.on?`<div class="g2">${selF('sizeH',[['fixed','Fixed width'],...(n.type==='text'||(n.auto&&n.auto.on)?[['hug','Hug contents']]:[]),['fill','Fill container']],n.sizeH||(n.type==='text'&&!n.fixedW?'hug':n.auto&&n.auto.on&&hugOf(n.auto,'w')?'hug':'fixed'),true,'Width sizing')}${selF('sizeV',[['fixed','Fixed height'],...(n.type==='text'||(n.auto&&n.auto.on)?[['hug','Hug contents']]:[]),['fill','Fill container']],n.sizeV||(n.type==='text'&&!n.fixedH?'hug':n.auto&&n.auto.on&&hugOf(n.auto,'h')?'hug':'fixed'),true,'Height sizing')}</div>
+    ${p&&p.auto&&p.auto.on?`<div class="hint" style="margin-top:4px">Resizing in “${esc(nm(p))}”</div><div class="g2">${selF('sizeH',[['fixed','Fixed'],...(n.type==='text'||(n.auto&&n.auto.on)?[['hug','Hug']]:[]),['fill','Fill']],n.sizeH||(n.type==='text'&&!n.fixedW?'hug':n.auto&&n.auto.on&&hugOf(n.auto,'w')?'hug':'fixed'),true,'Width resizing in auto layout')}${selF('sizeV',[['fixed','Fixed'],...(n.type==='text'||(n.auto&&n.auto.on)?[['hug','Hug']]:[]),['fill','Fill']],n.sizeV||(n.type==='text'&&!n.fixedH?'hug':n.auto&&n.auto.on&&hugOf(n.auto,'h')?'hug':'fixed'),true,'Height resizing in auto layout')}</div>
     ${n.sizeH==='fill'||n.sizeV==='fill'||n.minW||n.maxW||n.minH||n.maxH?`<div class="g2">${num('minW','Min W',n.minW||0,1,'Minimum width')}${num('maxW','Max W',n.maxW||0,1,'Maximum width (0 = none)')}${num('minH','Min H',n.minH||0,1,'Minimum height')}${num('maxH','Max H',n.maxH||0,1,'Maximum height (0 = none)')}</div>`:''}`:''}
     ${FRAMEY(t)&&A.on?`<div class="seg"><button data-autodir="v" class="${A.dir==='v'?'on':''}" title="Vertical" aria-label="Vertical">${ic('autov')}</button><button data-autodir="h" class="${A.dir==='h'?'on':''}" title="Horizontal" aria-label="Horizontal">${ic('autoh')}</button></div>
       <div class="g2">${num('auto.gap','↔',A.gap,1,'Gap between items')}${A.pt==null?num('auto.pad','▢',A.pad,1,'Padding (all sides)'):''}${selF('auto.align',[['start','Align start'],['center','Align center'],['end','Align end'],['stretch','Stretch']],A.align,true,'Cross-axis alignment')}${selF('auto.just',[['start','Pack start'],['center','Pack center'],['end','Pack end'],['between','Space between']],A.just,true,'Main-axis distribution')}</div>
