@@ -197,7 +197,8 @@ body.docktop #toast{bottom:auto;top:64px}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--accent:#0b74c4;--accent-text:#4ba3ef;--mute:#b0b0b0}}
 #rbody button:hover:not(.on){background:var(--hover)}
 .ib:focus-visible,#rbody button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-#aip header{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line);font-weight:600;font-size:12px}
+#rbody input:not([type=checkbox]):not([type=color]):not([type=range]),#rbody select{height:24px;box-sizing:border-box}
+#aip header{display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden;padding:8px 10px;border-bottom:1px solid var(--line);font-weight:600;font-size:12px}
 .aimark{width:18px;height:18px;border-radius:5px;background:linear-gradient(135deg,#d97757,#a259ff);display:grid;place-items:center;color:#fff;font-size:11px}
 #aimsgs{flex:1;overflow:auto;padding:12px;display:grid;gap:10px;align-content:start}
 .msg{padding:8px 10px;border-radius:10px;white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:18px;max-width:92%;unicode-bidi:plaintext}
@@ -239,7 +240,7 @@ pre.code{background:var(--panel2);border-radius:5px;padding:8px;font:11px/1.55 v
 .cmt textarea:focus{border-color:var(--accent)}
 .status td{padding:4px 6px;border-bottom:1px solid var(--line);vertical-align:top}
 .seg{display:flex;background:var(--panel2);border-radius:5px;padding:2px;gap:2px}
-.seg button{flex:1;background:none;border:0;border-radius:4px;height:20px;display:grid;place-items:center;color:var(--fg2);font-size:11px;white-space:nowrap;padding:0 4px}
+.seg button{flex:1;background:none;border:0;border-radius:4px;height:24px;display:grid;place-items:center;color:var(--fg2);font-size:11px;white-space:nowrap;padding:0 4px}
 .ib.on{background:var(--panel2);color:var(--fg)}
 .seg button.on{background:var(--panel);box-shadow:0 0 0 1px var(--line);color:var(--fg)}
 .seg svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.4}
@@ -351,7 +352,7 @@ function mk(type,o={}){
   const base={id:'n'+(D.seq++),type,name:null,x:0,y:0,w:100,h:100,rot:0,fill:'#d9d9d9',fillOn:true,grad:null,style:null,
     stroke:'#000000',strokeOn:false,sw:1,dash:0,rad:0,op:1,vis:true,lock:false,shadow:null,blur:0,children:[],cons:{h:'start',v:'start'},link:null};
   const t={frame:{fill:'#ffffff',clip:true,auto:null},comp:{fill:'#ffffff',clip:true,auto:null},line:{fillOn:false,strokeOn:true,h:0},
-    polygon:{sides:3},star:{sides:5,inner:.38},text:{text:'Text',fs:16,fw:400,font:'Inter',ta:'start',fill:'#000000',lh:1.25},
+    polygon:{sides:3},star:{sides:5,inner:.38},text:{text:'Text',fs:12,fw:400,font:'Inter',ta:'start',fill:'#000000',lh:1.25},
     path:{pts:[],closed:false,fillOn:false,strokeOn:true,stroke:'#000000',sw:1},group:{fillOn:false},inst:{master:null,clip:true}}[type]||{};
   const n=Object.assign(base,t,o);if(n.name===null&&!('name' in o))n.name=autoName(type);return n;
 }
@@ -641,7 +642,12 @@ stage.addEventListener('pointerup',e=>{
   if(d.k==='rs'||d.k==='rot'||d.k==='pt'){refresh();return}
   if(d.k==='marq'){UI.marq=null;select(UI.sel);return}
 });
+/* rename a frame from its name on the canvas: two clicks on the label (the canvas re-draws between clicks, so a native dblclick is not reliable here) */
+function openLabelRename(n,lbl){const r=lbl.getBoundingClientRect();const inp=document.createElement('input');inp.value=nm(n);inp.setAttribute('aria-label','Layer name');inp.style.cssText=`position:fixed;left:${r.left}px;top:${r.top-4}px;min-width:${Math.max(120,r.width+20)}px;font:600 12px Inter,sans-serif;padding:2px 6px;border:1px solid var(--accent);border-radius:4px;background:var(--panel);color:var(--fg);z-index:99`;document.body.appendChild(inp);inp.focus();inp.select();let done=false;const end=ok=>{if(done)return;done=true;if(ok&&inp.value.trim())n.name=inp.value.trim();inp.remove();refresh()};inp.addEventListener('keydown',k=>{k.stopPropagation();if(k.key==='Enter')end(true);if(k.key==='Escape')end(false)});inp.addEventListener('blur',()=>end(true))}
+let LASTLBL={id:null,t:0};
+stage.addEventListener('mousedown',ev=>{if(ev.button!==0)return;const lbl=ev.target.closest&&ev.target.closest('[data-lbl]');if(!lbl)return;const id=lbl.dataset.lbl,now=Date.now();if(LASTLBL.id===id&&now-LASTLBL.t<450){LASTLBL={id:null,t:0};const n=N(id);if(n){ev.preventDefault();ev.stopPropagation();setTimeout(()=>openLabelRename(n,document.querySelector(`[data-lbl="${CSS.escape(id)}"]`)||lbl),0)}return}LASTLBL={id,t:now}},true);
 stage.addEventListener('dblclick',ev=>{
+
   const tgt=document.elementFromPoint(ev.clientX,ev.clientY)||ev.target;const e={target:tgt,clientX:ev.clientX,clientY:ev.clientY};
   if(tgt.closest('.dock,#aip,#rul [data-ruler]'))return;
   if(UI.tool==='p'){penFinish();return}
@@ -653,7 +659,9 @@ stage.addEventListener('dblclick',ev=>{
   if(n.type==='path'){UI.editPts=n.id;UI.sel=[n.id];drawOv();toast('Editing points. Drag points or handles. Esc to finish');return}
   if(FRAMEY(n.type)&&n.children.length){const inner=N(el.dataset.id);if(inner&&inner!==n)select([inner.id])}
 });
-stage.addEventListener('wheel',e=>{if(e.target.closest('#aip'))return;e.preventDefault();if(e.ctrlKey||e.metaKey){const b=stage.getBoundingClientRect();const dy=Math.max(-60,Math.min(60,e.deltaMode===1?e.deltaY*16:e.deltaY));zoomAt(UI.z*Math.exp(-dy*.0028),e.clientX-b.left,e.clientY-b.top)}else{UI.px-=e.shiftKey?e.deltaY:e.deltaX;UI.py-=e.shiftKey?0:e.deltaY;render()}},{passive:false});
+/* a mouse wheel sends whole-number steps on one axis; a trackpad sends small fractions on both axes. Mouse steps zoom, like Figma. */
+const isMouseWheel=e=>e.deltaMode===1||(e.deltaX===0&&Number.isInteger(e.deltaY)&&Math.abs(e.deltaY)>=40&&!e.shiftKey);
+stage.addEventListener('wheel',e=>{if(e.target.closest('#aip'))return;e.preventDefault();if(e.ctrlKey||e.metaKey||isMouseWheel(e)){const b=stage.getBoundingClientRect();const dy=Math.max(-60,Math.min(60,e.deltaMode===1?e.deltaY*16:e.deltaY));zoomAt(UI.z*Math.exp(-dy*.0028),e.clientX-b.left,e.clientY-b.top)}else{UI.px-=e.shiftKey?e.deltaY:e.deltaX;UI.py-=e.shiftKey?0:e.deltaY;render()}},{passive:false});
 function toggleRulers(){UI.rulers=!UI.rulers;LS.set('cs-rulers',UI.rulers?'1':'0');drawOv();toast(UI.rulers?'Rulers on · drag from a ruler to add a guide':'Rulers off')}
 function zoomAt(z,mx,my){z=Math.min(256,Math.max(.02,z));const wx=(mx-UI.px)/UI.z,wy=(my-UI.py)/UI.z;UI.z=z;UI.px=mx-wx*z;UI.py=my-wy*z;render()}
 function zoomCenter(f){const r=stage.getBoundingClientRect();zoomAt(f(UI.z),r.width/2,r.height/2)}
@@ -761,7 +769,7 @@ function finishText(){const E=UI.edit;if(!E)return;UI.edit=null;const te=$('#te'
 function reid(n){n.id='n'+(D.seq++);n.children.forEach(reid)}
 function duplicate(nodes,off=0){const out=[];nodes.forEach(n=>{const c=clone(n);reid(c);c.x+=off;c.y+=off;const l=ALL[n.id].list;l.splice(l.indexOf(n)+1,0,c);out.push(c)});rebuildIdx();return out}
 function dupCmd(){const s=topSel();if(!s.length)return;const c=duplicate(s,0);c.forEach(n=>{if(!parentOf(n)&&FRAMEY(n.type))n.x+=n.w+40;else{n.x+=10;n.y+=10}});UI.sel=c.map(n=>n.id);refresh()}
-function del(){const s=topSel().filter(n=>!inInst(n));if(!s.length)return;const gone=new Set();s.forEach(n=>{(function f(x){gone.add(x.id);x.children.forEach(f)})(n)});s.forEach(n=>{const l=ALL[n.id]?.list;if(l)l.splice(l.indexOf(n),1)});Object.values(ALL).forEach(({n})=>{if(n.link&&gone.has(n.link))n.link=null});UI.sel=[];refresh()}
+function del(){const s=topSel().filter(n=>!inInst(n));if(!s.length)return;const gone=new Set();s.forEach(n=>{(function f(x){gone.add(x.id);x.children.forEach(f)})(n)});s.forEach(n=>{const l=ALL[n.id]?.list;if(l)l.splice(l.indexOf(n),1)});Object.values(ALL).forEach(({n})=>{if(n.link&&gone.has(n.link))n.link=null;if(n.type==='inst'&&gone.has(n.master)){n.type='frame';n.master=null;delete n.ovr}});UI.sel=[];refresh()}
 function group(){const s=topSel();if(!s.length)return;const p=parentOf(s[0]);if(s.some(n=>parentOf(n)!==p)){toast('Select layers in the same parent to group them');return}
   const l=listOf(p),idx=Math.max(...s.map(n=>l.indexOf(n)));const g=mk('group');l.splice(idx+1,0,g);rebuildIdx();s.sort((a,b)=>l.indexOf(a)-l.indexOf(b)).forEach(n=>moveTo(n,g));UI.sel=[g.id];refresh()}
 function frameSel(){const s=topSel();if(!s.length)return null;const p=parentOf(s[0]);const b=union(s.map(rbox));const pa=p?abs(p):{x:0,y:0};const l=listOf(p),idx=Math.max(...s.map(n=>l.indexOf(n)));
@@ -786,7 +794,7 @@ function newInstance(compId,at){const m=N(compId);if(!m)return;const i=mk('inst'
   UI.sel=[i.id];refresh();return i}
 function detach(){topSel().filter(n=>n.type==='inst').forEach(n=>{n.type='frame';n.master=null;delete n.ovr;n.children.forEach(reid)});refresh()}
 function gotoMain(){const n=topSel()[0];if(!n||n.type!=='inst')return;const m=ALL[n.master];if(!m){toast('Main component was deleted');return}D.cur=m.pi;UI.sel=[m.n.id];refresh(false);zoomFit([m.n])}
-function maskSel(){const s=topSel();if(s.length<2){toast('Select a shape and the layers above it');return}const l=ALL[s[0].id].list;s.sort((a,b)=>l.indexOf(a)-l.indexOf(b));const m=s[0];
+function maskSel(){const s=topSel();if(s.length<2){toast('Select a shape and the layers above it');return}const l=ALL[s[0].id].list;s.sort((a,b)=>l.indexOf(a)-l.indexOf(b));const m=s[s.length-1];// the top layer is the mask, as in Figma
   const g=frameSel();if(!g)return;g.fillOn=false;g.name='Mask group';g.rad=m.type==='ellipse'?Math.min(m.w,m.h)/2:m.rad;const dx=m.x,dy=m.y;g.children.forEach(c=>{c.x-=dx;c.y-=dy});g.x+=dx;g.y+=dy;g.w=m.w;g.h=m.h;m.vis=false;g.clip=true;refresh()}
 let PAPER_READY=false;
 function toPaper(n){const a=abs(n),c=new paper.Point(a.x+n.w/2,a.y+n.h/2);let it;
@@ -906,7 +914,7 @@ document.addEventListener('keydown',e=>{
   if(e.shiftKey&&e.code==='Digit1'){zoomFit();return}
   if(e.shiftKey&&e.code==='Digit2'){const s=selNodes();if(s.length)zoomFit(s);return}
   if(e.shiftKey&&k==='r'){toggleRulers();return}
-  if(e.shiftKey&&k==='a'){autoLayout();return}
+  if(e.shiftKey&&k==='a'){const s0=topSel()[0];if(s0&&s0.auto&&s0.auto.on){toast('This frame already has auto layout');return}autoLayout();return}
   if(e.shiftKey&&k==='d'){toggleDev();return}
   if(e.shiftKey&&k==='l'){UI.shape='a';setTool('a');return}
   if(e.shiftKey&&k==='h'){flip('h');return}if(e.shiftKey&&k==='v'){flip('v');return}
@@ -966,7 +974,7 @@ function pageMenu(anchor,i){const ren=()=>{const el=document.querySelector(`[dat
   popup(anchor,[{t:'Rename',f:ren},{t:'Duplicate page',f:()=>{const c=clone(D.pages[i]);c.id='p'+Date.now();c.name+=' copy';c.nodes.forEach(reid);D.pages.splice(i+1,0,c);refresh()}},
     ...(i>0?[{t:'Move up',f:()=>{D.comments.forEach(c=>{if(c.pg===i)c.pg=i-1;else if(c.pg===i-1)c.pg=i});const[pg]=D.pages.splice(i,1);D.pages.splice(i-1,0,pg);if(D.cur===i)D.cur=i-1;else if(D.cur===i-1)D.cur=i;refresh()}}]:[]),
     ...(i<D.pages.length-1?[{t:'Move down',f:()=>{D.comments.forEach(c=>{if(c.pg===i)c.pg=i+1;else if(c.pg===i+1)c.pg=i});const[pg]=D.pages.splice(i,1);D.pages.splice(i+1,0,pg);if(D.cur===i)D.cur=i+1;else if(D.cur===i+1)D.cur=i;refresh()}}]:[]),
-    ...(D.pages.length>1?['-',{t:'Delete page',f:()=>{D.comments=D.comments.filter(c=>c.pg!==i).map(c=>(c.pg>i&&c.pg--,c));D.pages.splice(i,1);D.cur=Math.min(D.cur,D.pages.length-1);UI.sel=[];refresh();zoomFit()}}]:[])],'down')}
+    ...(D.pages.length>1?['-',{t:'Delete page',f:()=>{D.comments=D.comments.filter(c=>c.pg!==i).map(c=>(c.pg>i&&c.pg--,c));D.pages.splice(i,1);if(i<D.cur)D.cur--;D.cur=Math.min(D.cur,D.pages.length-1);UI.sel=[];refresh();zoomFit()}}]:[])],'down')}
 function layerMenu(anchor){const s=topSel();const one=s[0];
   const items=s.length?[{t:'Copy',k:'Ctrl+L',f:copyAll},{t:'Paste',k:'Ctrl+V',f:paste},{t:'Duplicate',k:'Ctrl+D',f:dupCmd},{t:'Delete',k:'Del',f:del},'-',
     {t:'Group selection',k:'Ctrl+G',f:group},{t:'Frame selection',k:'Ctrl+Alt+G',f:frameSel},{t:'Ungroup',k:'Ctrl+Shift+G',f:ungroup},{t:'Add auto layout',k:'Shift+A',f:autoLayout},{t:'Create component',k:'Ctrl+Alt+K',f:makeComp},'-',
@@ -992,7 +1000,7 @@ function drawIconGrid(){const g=$('#icongrid');if(!g)return;if(!ICONS){g.innerHT
   const keys=Object.keys(ICONS);if(!keys.length){g.innerHTML='<span class="hint">Icons are not available in this view.</span>';return}const q=($('#iconq')?.value||'').trim().toLowerCase();
   const hit=q?keys.filter(k=>k.includes(q)||ICONS[k][1].includes(q)):keys;$('#iconcount').textContent=`${hit.length} icons`;
   g.innerHTML=hit.slice(0,90).map(k=>`<button class="ib" draggable="true" data-icon="${k}" title="${k}" aria-label="Insert icon ${k}" style="height:34px"><svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke-width:2"><path d="${ICONS[k][0]}"/></svg></button>`).join('')+(hit.length>90?`<span class="hint" style="grid-column:1/-1">Showing 90 of ${hit.length}. Search to narrow down.</span>`:'')}
-function insertIcon(k,at){const ic=ICONS&&ICONS[k];if(!ic)return;if(at){const par=parentAt(at,new Set());const pa=par?abs(par):{x:0,y:0};const n=buildNode({type:'path',name:k,d:ic[0],viewBox:24,w:24,h:24,stroke:'#1e1e1e',sw:2});n.x=pxr(at.x-12-pa.x);n.y=pxr(at.y-12-pa.y);listOf(par).push(n);UI.sel=[n.id];refresh();return}const sel=topSel()[0];const par=sel&&FRAMEY(sel.type)?sel:sel?parentOf(sel):null;const c=viewCenter();const pa=par?abs(par):{x:0,y:0};
+function insertIcon(k,at){if(!ICONS){loadIcons().then(()=>insertIcon(k,at));return}const ic=ICONS&&ICONS[k];if(!ic){toast('Icon not found: '+k);return}if(at){const par=parentAt(at,new Set());const pa=par?abs(par):{x:0,y:0};const n=buildNode({type:'path',name:k,d:ic[0],viewBox:24,w:24,h:24,stroke:'#1e1e1e',sw:2});n.x=pxr(at.x-12-pa.x);n.y=pxr(at.y-12-pa.y);listOf(par).push(n);UI.sel=[n.id];refresh();return}const sel=topSel()[0];const par=sel&&FRAMEY(sel.type)?sel:sel?parentOf(sel):null;const c=viewCenter();const pa=par?abs(par):{x:0,y:0};
   const n=buildNode({type:'path',name:k,d:ic[0],viewBox:24,w:24,h:24,stroke:'#1e1e1e',sw:2});if(par&&par.auto&&par.auto.on){}else{n.x=fmt(par&&sel===par?16:c.x-12-pa.x);n.y=fmt(par&&sel===par?16:c.y-12-pa.y)}listOf(par).push(n);UI.sel=[n.id];refresh()}
 async function uiKit(he){await loadIcons();const I=(name,c,sz=20)=>({type:'path',name:'Icon/'+name,d:(ICONS&&ICONS[name]?ICONS[name][0]:'M4 4h16v16H4z'),viewBox:24,w:sz,h:sz,stroke:c,sw:2});
   const P='#0a7cd6',TX='#1e1e1e',MU='#6e6e6e',BO='#d9dce4',SU='#f3f4f7';const L=he?{btn:'המשך',lab:'אימייל',ph:'name@example.com',chk:'זכור אותי',tog:'התראות',ct:'כותרת הכרטיס',cb:'תיאור קצר של התוכן בשתי שורות לכל היותר.',it:'פריט ברשימה',is:'תיאור משני',top:'כותרת המסך',srch:'חיפוש',tabs:['בית','חיפוש','שמורים','פרופיל'],badge:'חדש',chip:'תגית',av:'תמ',link:'לפרטים'}
@@ -1559,7 +1567,7 @@ async function aiSendExt(text,mid){const dk=CAP.desk;const inp=$('#aiin');const 
   }finally{if(!bubble.content){const i=AIT.indexOf(bubble);if(i>=0)AIT.splice(i,1)}AIBUSY=false;AICTL=null;if($('#aigo')){$('#aigo').disabled=false;$('#aistop').hidden=true}aiDraw();saveChat()}}
 function aiCtx(){const el=$('#aictx');if(!el||!D)return;const s=topSel();el.innerHTML=s.length?s.slice(0,6).map(n=>`<span class="chip">${esc(nm(n))}</span>`).join('')+(s.length>6?`<span class="chip n">+${s.length-6}</span>`:''):`<span class="chip n">No selection · Claude sees the whole page “${esc(page().name)}”</span>`}
 function aiDraw(){const el=$('#aimsgs');if(!el)return;const hb=$('#aihist');if(hb)hb.classList.toggle('on',!!UI.aiHist);if(UI.aiHist){el.innerHTML=historyHTML();return}const multi=new Set(AIT.filter(m=>m.role==='assistant'&&m.model).map(m=>m.model)).size>1||(AIT.some(m=>m.model)&&modelOptions().length>1);el.innerHTML=AIT.filter(m=>m.show!==false).map(m=>`<div class="msg ${m.cls||(m.role==='user'?'u':'a')}">${esc(m.view??m.content)}</div>`+(multi&&m.role==='assistant'&&m.model?`<div class="mtag">${esc(modelName(m.model))}</div>`:'')).join('')||`<div class="hint" style="padding:8px">Select layers on the canvas, then tell Claude what to do with them. Claude can read the design, edit layers, create new screens and answer questions. Every change can be undone with Ctrl+Z.</div>`;el.scrollTop=el.scrollHeight}
-function aiPush(cls,text){AIT.push({role:'note',cls,content:text,view:text});aiDraw()}
+function aiPush(cls,text){const last=AIT[AIT.length-1];if(last&&last.role==='note'&&last.cls===cls&&last.content===text)return;AIT.push({role:'note',cls,content:text,view:text});aiDraw()}
 function compact(n,depth=0){const o={id:n.id,type:n.type,name:nm(n),x:fmt(n.x),y:fmt(n.y),w:fmt(n.w),h:fmt(n.h)};if(n.rot)o.rot=n.rot;if(n.type==='text'){o.text=n.text;o.fs=n.fs;o.fw=n.fw;o.font=n.font}if(n.fillOn&&n.type!=='group')o.fill=col(n);if(n.strokeOn)o.stroke=n.stroke+' '+n.sw;if(n.rad)o.rad=n.rad;if(!n.vis)o.hidden=true;if(n.auto&&n.auto.on)o.auto=n.auto;if(n.type==='inst')o.component=nm(N(n.master)||{name:'?',type:'comp'});if(n.link)o.link=n.link;
   if(n.children.length&&n.type!=='inst'){o.children=depth>6?`${n.children.length} layers`:n.children.map(c=>compact(c,depth+1))}return o}
 function ctxText(){const s=topSel();const outline=JSON.stringify(page().nodes.map(n=>compact(n)));const b=union(page().nodes.map(rbox));
@@ -1579,7 +1587,7 @@ How to work:
 - Websites and landing pages: build each page as a desktop frame (1440 wide) using auto layout for every section (nav, hero, features, footer) so it becomes responsive, link buttons/nav items to other page frames with link, and tell the person they can press Website to publish it.
 - Icons: use create_layers with {type:"path", d, viewBox:24, w, h, stroke, sw:2} using Lucide-style 24px stroke paths.
 - Reply in the language the person writes in.`;
-function applyProps(n,p){const ignored=[];const ok=['sizeH','sizeV','minW','maxW','minH','maxH','src','fit','name','x','y','w','h','rot','fill','fillOn','stroke','strokeOn','sw','dash','rad','op','vis','lock','text','fs','fw','font','ta','lh','ls','italic','upper','deco','fst','blur','shadow','auto','clip','sides','inner','closed','link','absPos','cons','grad','style','arrow'];
+function applyProps(n,p){const ignored=[];const ok=['sizeH','sizeV','minW','maxW','minH','maxH','src','fit','name','x','y','w','h','rot','fill','fillOn','stroke','strokeOn','sw','dash','rad','op','vis','lock','text','fs','fw','font','ta','lh','ls','italic','upper','deco','fst','blur','shadow','auto','clip','sides','inner','closed','link','absPos','cons','grad','style','arrow','variant'];
   let w=n.w,h=n.h,hasW=false,hasH=false;for(const k in p){if(!ok.includes(k)){ignored.push(k);continue}let v=p[k];
     if(k==='src'&&!/^(https:\/\/|data:image\/|\/_blob\/)/.test(String(v))){ignored.push(k);continue}
     const EN2={deco:['','underline','line-through'],fst:WIDTHS.map(w=>w[0]),ta:['start','center','end'],fit:['fill','fit','stretch'],sizeH:['fixed','hug','fill'],sizeV:['fixed','hug','fill']};if(EN2[k]&&!EN2[k].includes(v)){ignored.push(k+' (allowed: '+EN2[k].join(', ')+')');continue}
@@ -1598,9 +1606,9 @@ function buildNode(spec){
   if(spec.d&&['path','icon','vector','svg'].includes(spec.type)){const d=String(spec.d);if(!/^[MmLlHhVvCcSsQqTtAaZz0-9.,\s+\-eE]*$/.test(d))throw new Error('d must be SVG path data');const vb=Number(spec.viewBox)||24;const w=Number(spec.w)||24,h=Number(spec.h)||w;
     const n=mk('rect',{type:'bool',name:String(spec.name||'Icon'),d,ox:0,oy:0,sx:w/vb,sy:h/vb,rule:'nonzero',w,h,fillOn:spec.fill!=null,strokeOn:spec.stroke!=null,fill:'#000000'});const sp={...spec};delete sp.w;delete sp.h;delete sp.type;delete sp.d;applyProps(n,sp);n.fillOn=spec.fill!=null||spec.fillOn===true;n.strokeOn=spec.stroke!=null;if(n.strokeOn)n.sw=(Number(spec.sw)||2);return n}
   if(spec.type==='image'){const n=mk('image',{fit:'fill',fillOn:false,w:Number(spec.w)||200,h:Number(spec.h)||150});applyProps(n,spec);if(!n.src)n.fillOn=true;return n}
-  if(spec.component){const m=Object.values(ALL).find(a=>a.n.type==='comp'&&(a.n.id===spec.component||nm(a.n)===spec.component));if(m)return mk('inst',{name:m.n.name,master:m.n.id,x:Number(spec.x)||0,y:Number(spec.y)||0,w:Number(spec.w)||m.n.w,h:Number(spec.h)||m.n.h})}
+  if(spec.component){const m=Object.values(ALL).find(a=>a.n.type==='comp'&&(a.n.id===spec.component||nm(a.n)===spec.component));if(m){const I=mk('inst',{name:spec.name?String(spec.name):m.n.name,master:m.n.id,x:Number(spec.x)||0,y:Number(spec.y)||0,w:Number(spec.w)||m.n.w,h:Number(spec.h)||m.n.h});if(Array.isArray(spec.ovr)){I.ovr=spec.ovr.filter(o=>o&&/^[\w~]+$/.test(String(o.src))&&['text','fill','vis','fs','fw','font','src','stroke','op'].includes(o.k)).map(o=>({src:String(o.src),k:o.k,v:o.k==='fill'||o.k==='stroke'?C(o.v):o.k==='text'||o.k==='font'||o.k==='src'?String(o.v):o.k==='vis'?!!o.v:+o.v||0}))}return I}}
   const type=['frame','rect','ellipse','line','polygon','star','text','path','group','comp'].includes(spec.type)?spec.type:'rect';
-  const n=mk(type);if(type==='text'&&spec.text==null)spec.text='Text';applyProps(n,spec);if(spec.name)n.name=String(spec.name);
+  const n=mk(type);if(type==='text'&&spec.text==null)spec.text='Text';applyProps(n,spec);if(type==='text'&&spec.w==null){n.fixedW=false;measure(n)}if(spec.name)n.name=String(spec.name);if(spec.tstyle&&(D.tstyles||[]).some(t=>t.id===spec.tstyle))n.tstyle=String(spec.tstyle);
   if(Array.isArray(spec.children)&&CONTAINER(type))spec.children.forEach(c=>n.children.push(buildNode(c||{})));
   return n}
 const aiTools=()=>[
@@ -1613,7 +1621,15 @@ const aiTools=()=>[
       refresh();aiPush('t',`✎ Updated ${done.length} layer${done.length===1?'':'s'}${done.length?': '+done.slice(0,5).join(', '):''}`);if(miss.length)throw new Error('Some layers could not be found (they may have been deleted). Read the canvas again for current ids.');return{updated:done.length,ignoredProps:[...new Set(ign)]}}},
   {name:'create_layers',description:'Create new layers, with nested children, inside parentId (omit for the page). Each layer: {type,name,x,y,w,h,fill,text,fs,fw,ta,rad,stroke,sw,auto,shadow,children,component}. Use component (a component id or name) to place an instance. Returns the new ids.',
     inputSchema:{type:'object',properties:{parentId:{type:'string'},layers:{type:'array',items:{type:'object'}}},required:['layers']},
-    execute:(inp)=>{const par=inp.parentId?N(String(inp.parentId)):null;if(inp.parentId&&(!par||!CONTAINER(par.type)||par.type==='inst'))throw new Error('parentId is not a frame or group');const ids=[];(Array.isArray(inp.layers)?inp.layers:[]).forEach(s=>{const n=buildNode(s||{});listOf(par).push(n);ids.push(n.id)});UI.sel=ids;refresh();aiPush('t',`＋ Created ${ids.length} layer${ids.length===1?'':'s'}`);const f=ids.map(N).filter(Boolean);if(f.length&&!par)zoomFit(f);return{ids}}},
+    execute:(inp)=>{const par=inp.parentId?N(String(inp.parentId)):null;if(inp.parentId&&(!par||!CONTAINER(par.type)||par.type==='inst'))throw new Error('parentId is not a frame or group');const ids=[],ign=new Set();const KNOWN=['type','name','x','y','w','h','fill','fillOn','text','fs','fw','fop','ta','rad','stroke','strokeOn','sw','dash','auto','shadow','blur','grad','children','component','ovr','variant','d','viewBox','src','fit','lh','ls','italic','upper','deco','fst','clip','sides','inner','closed','link','trans','absPos','cons','style','tstyle','arrow','op','vis','lock','font','sizeH','sizeV','minW','maxW','minH','maxH','rot','fixedW','fixedH','va','lgrid'];const note=(sp,where)=>Object.keys(sp||{}).forEach(k=>{if(!KNOWN.includes(k))ign.add(k);else if(where==='inst'&&['fill','shadow','auto','blur','grad','text','sizeH','sizeV','rad','w','h'].includes(k)&&!(k==='w'||k==='h'))ign.add(k+' (set it on the instance layers through ovr)')});(Array.isArray(inp.layers)?inp.layers:[]).forEach(s=>{const sp=s||{};note(sp,sp.component?'inst':'');const n=buildNode(sp);listOf(par).push(n);ids.push(n.id)});UI.sel=ids;refresh();aiPush('t',`＋ Created ${ids.length} layer${ids.length===1?'':'s'}`);const f=ids.map(N).filter(Boolean);if(f.length&&!par)zoomFit(f);return ign.size?{ids,ignoredProps:[...ign]}:{ids}}},
+  {name:'mask_layers',description:'Use the top layer of the selection as a mask for the layers under it (like Figma Use as mask). Pass the ids, the top one is the mask.',inputSchema:{type:'object',properties:{ids:{type:'array',items:{type:'string'}}},required:['ids']},
+    execute:(inp)=>{const ok=(inp.ids||[]).map(String).filter(id=>ALL[id]&&ALL[id].pi===D.cur);if(ok.length<2)throw new Error('Pass at least two layer ids on the same page');select(ok);maskSel();return{masked:ok.length}}},
+  {name:'boolean_layers',description:'Combine layers with a boolean operation: union, subtract, intersect or exclude. Pass ids (2 or more) and op.',inputSchema:{type:'object',properties:{ids:{type:'array',items:{type:'string'}},op:{type:'string',enum:['union','subtract','intersect','exclude']}},required:['ids','op']},
+    execute:(inp)=>{const ok=(inp.ids||[]).map(String).filter(id=>ALL[id]&&ALL[id].pi===D.cur);if(ok.length<2)throw new Error('Pass at least two layer ids on the same page');select(ok);booleanOp(inp.op);return{combined:ok.length,op:inp.op}}},
+  {name:'add_color_style',description:'Create a named color style (a color variable) with a light and a dark value. Returns its id.',inputSchema:{type:'object',properties:{name:{type:'string'},light:{type:'string'},dark:{type:'string'}},required:['name','light']},
+    execute:(inp)=>{const c=(v)=>{const x=String(v||'');if(!/^#[0-9a-f]{6}$/i.test(x))throw new Error('colors must be #RRGGBB');return x};const id='s'+Date.now().toString(36);D.styles.push({id,name:String(inp.name).slice(0,60),light:c(inp.light),dark:c(inp.dark||inp.light)});refresh();return{id}}},
+  {name:'apply_color_style',description:'Fill layers with a color style by its id (layers stay linked to the style).',inputSchema:{type:'object',properties:{ids:{type:'array',items:{type:'string'}},styleId:{type:'string'}},required:['ids','styleId']},
+    execute:(inp)=>{const st=D.styles.find(x=>x.id===String(inp.styleId));if(!st)throw new Error('No color style with that id');let k=0;(inp.ids||[]).forEach(id=>{const a=ALL[String(id)];if(a&&a.pi===D.cur){a.n.style=st.id;a.n.fill=st.light;a.n.fillOn=true;k++}});refresh();return{applied:k}}},
   {name:'delete_layers',description:'Delete layers by id. Returns how many were deleted.',inputSchema:{type:'object',properties:{ids:{type:'array',items:{type:'string'}}},required:['ids']},
     execute:(inp)=>{let k=0;const gone=new Set();(inp.ids||[]).forEach(id=>{const a=ALL[String(id)];if(a&&!inInst(a.n)){(function f(x){gone.add(x.id);x.children.forEach(f)})(a.n);a.list.splice(a.list.indexOf(a.n),1);rebuildIdx();k++}});Object.values(ALL).forEach(({n})=>{if(n.link&&gone.has(n.link))n.link=null;if(n.type==='inst'&&gone.has(n.master))n.type='frame'});UI.sel=UI.sel.filter(i=>ALL[i]);refresh();aiPush('t',`Deleted ${k} layer${k===1?'':'s'}`);return{deleted:k}}},
   {name:'select_layers',description:'Select layers on the canvas and zoom to them, to show the person something.',inputSchema:{type:'object',properties:{ids:{type:'array',items:{type:'string'}}},required:['ids']},
