@@ -36,7 +36,8 @@ async function openDb() {
   }
   if (!db) db = new SQL.Database();
   db.run(`CREATE TABLE IF NOT EXISTS files(id TEXT PRIMARY KEY, name TEXT, updated INTEGER, created INTEGER, folder TEXT, star INTEGER, trashed INTEGER, thumb TEXT, json TEXT);
-          CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);`);
+          CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT);
+          CREATE TABLE IF NOT EXISTS images(id TEXT PRIMARY KEY, data TEXT);`);
   writeNow();
   dailyBackup();
 }
@@ -100,6 +101,9 @@ ipcMain.handle('db:remove', (e, id) => { db.run('DELETE FROM files WHERE id=?', 
 ipcMain.handle('db:getFolders', () => { const r = rows("SELECT value FROM meta WHERE key='folders'")[0]; try { return r ? JSON.parse(r.value) : []; } catch (e) { return []; } });
 ipcMain.handle('db:setFolders', (e, list) => { db.run("INSERT OR REPLACE INTO meta(key,value) VALUES('folders',?)", [JSON.stringify(list || [])]); return persist(); });
 ipcMain.handle('db:flush', () => { writeNow(); return true; });
+// images are stored once, by id; documents keep only references to them
+ipcMain.handle('img:save', (e, pairs) => { if (!Array.isArray(pairs)) return false; for (const pr of pairs) { if (pr && pr[0] && typeof pr[1] === 'string') db.run('INSERT OR REPLACE INTO images(id,data) VALUES(?,?)', [String(pr[0]), pr[1]]); } return persist(); });
+ipcMain.handle('img:load', (e, ids) => { const out = {}; if (!Array.isArray(ids)) return out; for (const id of ids.slice(0, 2000)) { const r = rows('SELECT data FROM images WHERE id=?', [String(id)])[0]; if (r) out[String(id)] = r.data; } return out; });
 
 /* ---------- files, fonts, Claude connection ---------- */
 ipcMain.handle('file:save', async (e, name, data) => {

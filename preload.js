@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('vellum', {
   saveFile: (name, data) => ipcRenderer.invoke('file:save', name, data),
   fonts: () => ipcRenderer.invoke('fonts:list'),
   connectClaude: () => ipcRenderer.invoke('claude:connect'),
+  saveImages: pairs => ipcRenderer.invoke('img:save', pairs),
+  loadImages: ids => ipcRenderer.invoke('img:load', ids),
   aiStatus: () => ipcRenderer.invoke('ai:status'),
   aiSave: (id, cfg) => ipcRenderer.invoke('ai:save', id, cfg),
   aiModels: id => ipcRenderer.invoke('ai:models', id),
