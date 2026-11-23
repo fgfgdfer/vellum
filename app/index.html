@@ -511,7 +511,7 @@ function r(n){
   }
   return`<g ${at}>${body}</g>`;
 }
-function render(){if(!D)return;rebuildIdx();if(UI.edit&&UI.edit.place&&$('#te'))requestAnimationFrame(()=>{if(UI.edit&&UI.edit.place){UI.edit.place();const g=world.querySelector(`[data-id="${CSS.escape(UI.edit.n.id)}"]`);if(g)g.style.opacity=0}});DEFS=[];const b=page().nodes.map(r).join('');world.innerHTML=`<defs>${DEFS.join('')}</defs>${b}`;
+function render(){if(!D)return;rebuildIdx();if(UI.edit&&UI.edit.place&&$('#te'))requestAnimationFrame(()=>{if(UI.edit&&UI.edit.place){UI.edit.place();const g=world.querySelector(`[data-id="${CSS.escape(UI.edit.n.id)}"]`);if(g)g.style.opacity=0}});DEFS=[];const vx0=-UI.px/UI.z-200,vy0=-UI.py/UI.z-200,vx1=vx0+stage.clientWidth/UI.z+400,vy1=vy0+stage.clientHeight/UI.z+400;const onScreen=n=>{if(!n.vis&&n.vis!==undefined)return false;const b=rbox(n);return b.x<vx1&&b.x+b.w>vx0&&b.y<vy1&&b.y+b.h>vy0};const drawn=page().nodes.length>300?page().nodes.filter(onScreen):page().nodes;const b=drawn.map(r).join('');world.innerHTML=`<defs>${DEFS.join('')}</defs>${b}`;
   world.setAttribute('transform',`translate(${UI.px} ${UI.py}) scale(${UI.z})`);
   stage.style.backgroundColor=page().bg||'';const gs=8*UI.z;stage.style.backgroundSize=`${gs}px ${gs}px`;stage.style.backgroundPosition=`${UI.px}px ${UI.py}px`;
   stage.classList.toggle('dots',UI.grid&&UI.z>=2);$('#zoom').textContent=Math.round(UI.z*100)+'%';drawOv();pins()}
@@ -575,7 +575,7 @@ async function storeImages(pairs){if(!pairs||!pairs.length)return;try{if(CAP.des
 async function fetchImages(ids){const need=ids.filter(id=>!IMG.has(id));if(!need.length)return;try{let got={};if(CAP.desk&&CAP.desk.loadImages){got=await CAP.desk.loadImages(need)||{}}else{const db=await imgDB();got=await new Promise((res,rej)=>{const out={};const tx=db.transaction('img','readonly');const st=tx.objectStore('img');need.forEach(k=>{const r=st.get(k);r.onsuccess=()=>{if(r.result)out[k]=r.result}});tx.oncomplete=()=>res(out);tx.onerror=()=>rej(tx.error)})}for(const k in got){IMG.set(k,got[k]);IMG_SAVED.add(k)}}catch(e){}}
 async function prepareDoc(d){if(!d)return d;const miss=resolveDoc(d);if(miss.length){await fetchImages(miss);resolveDoc(d)}return d}
 function snap(){return packDoc({pages:D.pages,styles:D.styles,tstyles:D.tstyles||[],comments:D.comments,seq:D.seq,mode:D.mode,name:D.name}).json}
-function commit(){if(UI.readonly)return;const s=snap();if(HIST[HI]===s)return;HIST=HIST.slice(0,HI+1);HIST.push(s);if(HIST.length>100)HIST.shift();HI=HIST.length-1;if(HIST.length>1)saveDoc()}
+function commit(){if(UI.readonly)return;const s=snap();if(HIST[HI]===s)return;HIST=HIST.slice(0,HI+1);HIST.push(s);let hb=0;for(let i=HIST.length-1;i>=0;i--){hb+=HIST[i].length;if(hb>40*1048576&&i>0){HIST=HIST.slice(i);break}}if(HIST.length>100)HIST.shift();HI=HIST.length-1;if(HIST.length>1)saveDoc()}
 function restore(s){const o=JSON.parse(s);resolveDoc(o);Object.assign(D,o);if(D.cur>=D.pages.length)D.cur=0;rebuildIdx();UI.sel=UI.sel.filter(id=>ALL[id]&&ALL[id].pi===D.cur);refresh(false);saveDoc()}
 function undo(){if(UI.nt){clearTimeout(UI.nt);UI.nt=null;commit()}if(HI>0){HI--;restore(HIST[HI])}}
 function redo(){if(HI<HIST.length-1){HI++;restore(HIST[HI])}}
