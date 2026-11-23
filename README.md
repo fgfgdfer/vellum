@@ -1,5 +1,11 @@
 # Vellum (desktop)
 
+## Download
+
+Latest Windows installer: https://github.com/fgfgdfer/vellum/releases/latest (file `Vellum-Setup-<version>.exe`).
+Installed copies update themselves when a new version is released.
+
+
 Interface design editor for Windows (Mac later). Everything runs on your computer and costs nothing.
 
 ## Install on Windows
