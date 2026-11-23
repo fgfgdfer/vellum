@@ -9,8 +9,8 @@
 <style>
 /* Layout: file browser home (projects sidebar + file grid), then editor = left panel (file, pages, layers) | canvas with floating bottom toolbar | right inspector. Light by default, dark follows the computer. */
 :root{
-  --panel:#ffffff; --panel2:#f5f5f5; --hover:#f0f0f0; --line:#e6e6e6; --fg:#1e1e1e; --fg2:#5c5c5c; --mute:#6e6e6e;
-  --accent:#0b6fcb; --accentw:#e5f4ff; --onaccent:#ffffff; --comp:#9747ff; --compw:#f1e9ff; --dev:#14ae5c; --danger:#f24822;
+  --panel:#ffffff; --panel2:#f5f5f5; --hover:#f0f0f0; --line:#e6e6e6; --fg:#1e1e1e; --fg2:#5c5c5c; --mute:#666666;
+  --accent:#0b6fcb; --accent-text:#0b6fcb; --accentw:#e5f4ff; --onaccent:#ffffff; --comp:#9747ff; --compw:#f1e9ff; --dev:#14ae5c; --danger:#f24822;
   --canvas:#f5f5f5; --dot:#0000001a; --shadow:0 2px 6px #0000000f,0 8px 28px #0000001f; --ui:'Inter',system-ui,sans-serif; --mono:'JetBrains Mono',ui-monospace,monospace;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--panel:#2c2c2c;--panel2:#383838;--hover:#3a3a3a;--line:#444444;--fg:#ffffff;--fg2:#c7c7c7;--mute:#9b9b9b;--accent:#0c8ce9;--accentw:#0c8ce93a;--comp:#a970ff;--compw:#a970ff33;--canvas:#1e1e1e;--dot:#ffffff1c;--shadow:0 2px 6px #0006,0 8px 28px #0008;color-scheme:dark}}
@@ -173,7 +173,7 @@ input[type=range]{accent-color:var(--accent)}
 .dock .dev.on{background:var(--dev)}
 .dock.top{bottom:auto;top:12px}
 body.docktop #toast{bottom:auto;top:64px}
-.pop{position:absolute;background:#1e1e1e;color:#fff;border-radius:8px;padding:6px;box-shadow:var(--shadow);z-index:60;min-width:200px;display:grid}
+.pop{position:absolute;background:var(--panel);color:var(--fg);border-radius:8px;padding:6px;box-shadow:var(--shadow);z-index:60;min-width:200px;display:grid}
 .pop button{background:none;border:0;color:#fff;display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:5px;text-align:left}
 .pop button:hover,.pop button.on,.pop button:focus-visible{background:var(--accent);outline:0}
 .pop button .k{margin-left:auto;color:#ffffff99}
@@ -192,7 +192,12 @@ body.docktop #toast{bottom:auto;top:64px}
 #rbody input[type=checkbox]:checked{background:var(--accent)}
 #rbody input[type=checkbox]:checked::after{transform:translateX(11px)}
 #rbody input[type=checkbox]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-#aip header{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);font-weight:600;font-size:12px}
+/* dark theme: text and buttons meet WCAG AA (4.5:1) */
+:root[data-theme="dark"]{--accent:#0b74c4;--accent-text:#4ba3ef;--mute:#b0b0b0}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--accent:#0b74c4;--accent-text:#4ba3ef;--mute:#b0b0b0}}
+#rbody button:hover:not(.on){background:var(--hover)}
+.ib:focus-visible,#rbody button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+#aip header{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line);font-weight:600;font-size:12px}
 .aimark{width:18px;height:18px;border-radius:5px;background:linear-gradient(135deg,#d97757,#a259ff);display:grid;place-items:center;color:#fff;font-size:11px}
 #aimsgs{flex:1;overflow:auto;padding:12px;display:grid;gap:10px;align-content:start}
 .msg{padding:8px 10px;border-radius:10px;white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:18px;max-width:92%;unicode-bidi:plaintext}
@@ -485,7 +490,7 @@ function r(n){
   if(sh||n.blur>0){DEFS.push(`<filter id="f${sid}" x="-60%" y="-60%" width="220%" height="220%">${n.blur>0?`<feGaussianBlur in="SourceGraphic" stdDeviation="${n.blur/2}" result="b"/>`:''}${sh?`<feDropShadow in="${n.blur>0?'b':'SourceGraphic'}" dx="${n.shadow.x}" dy="${n.shadow.y}" stdDeviation="${n.shadow.b/2}" flood-color="${C(n.shadow.c)}" flood-opacity="${n.shadow.o??.25}"/>`:''}</filter>`);at+=` filter="url(#f${sid})"`}
   const P=paintAttr(n),S=strokeAttr(n);let body='';
   switch(n.type){
-    case'rect':body=`<rect width="${fmt(n.w)}" height="${fmt(n.h)}" rx="${n.rad}" ${P}${S}/>`;break;
+    case'rect':body=`<rect width="${fmt(n.w)}" height="${fmt(n.h)}" rx="${+n.rad||0}" ${P}${S}/>`;break;
     case'ellipse':body=`<ellipse cx="${fmt(n.w/2)}" cy="${fmt(n.h/2)}" rx="${fmt(n.w/2)}" ry="${fmt(n.h/2)}" ${P}${S}/>`;break;
     case'line':{const ln=`x1="0" y1="${fmt(n.h/2)}" x2="${fmt(n.w)}" y2="${fmt(n.h/2)}"`;body=`<line ${ln} stroke="${n.stroke}" stroke-width="${n.sw}"${n.dash?` stroke-dasharray="${n.dash} ${n.dash}"`:''} stroke-linecap="round"/>${n.arrow?`<path d="M${n.w-n.sw*4-4} ${n.h/2-n.sw*3-3}L${n.w} ${n.h/2}L${n.w-n.sw*4-4} ${n.h/2+n.sw*3+3}" fill="none" stroke="${n.stroke}" stroke-width="${n.sw}" stroke-linecap="round" stroke-linejoin="round"/>`:''}<line ${ln} stroke="#000" stroke-opacity="0" stroke-width="10"/>`;break}
     case'polygon':case'star':body=`<polygon points="${polyPts(n)}" ${P}${S} stroke-linejoin="round"/>`;break;
@@ -928,7 +933,10 @@ function layers(){if(!D)return;
     rows.push(`<div class="lyr ${UI.sel.includes(n.id)?'sel':''} ${n.type} ${n.vis?'':'dim'}" draggable="true" data-l="${n.id}" style="padding-left:${4+d*16}px"><span class="tw" data-tg="${exp?n.id:''}">${exp?(col?'▶':'▼'):''}</span><span class="ty">${ic(TYI[n.type]||'rect')}</span><span class="nm" data-rn="${n.id}">${esc(nm(n))}</span><button class="act ${n.lock?'on':''}" data-lk="${n.id}" title="${n.lock?'Unlock':'Lock'}" aria-label="${n.lock?'Unlock':'Lock'} ${esc(nm(n))}">${ic(n.lock?'lock':'unlock')}</button><button class="act ${n.vis?'':'on'}" data-vz="${n.id}" title="${n.vis?'Hide':'Show'}" aria-label="${n.vis?'Hide':'Show'} ${esc(nm(n))}">${ic(n.vis?'eye':'eyeoff')}</button></div>`);
     if(exp&&!col)walk(n.children,d+1)})};walk(page().nodes,0);
   L.innerHTML=rows.join('')||'<div class="hint" style="padding:8px 12px">No layers yet. Pick a tool from the toolbar and draw on the canvas.</div>';}
-$('#left').addEventListener('click',e=>{const t=e.target.closest('button,[data-pg],[data-l],[data-asset]')||e.target;
+let LASTROW={id:null,t:0};
+$('#left').addEventListener('click',e=>{const rn=e.target.closest('[data-rn]');
+  if(rn&&!rn.isContentEditable){const id=rn.dataset.rn,now=Date.now();if(LASTROW.id===id&&now-LASTROW.t<450){LASTROW={id:null,t:0};const n=N(id);const el=document.querySelector(`[data-rn="${CSS.escape(id)}"]`);if(n&&el){e.preventDefault();inlineEdit(el,()=>nm(n),v=>n.name=v);return}}LASTROW={id,t:now}}
+  const t=e.target.closest('button,[data-pg],[data-l],[data-asset]')||e.target;
   if(t.dataset.pgm!=null){e.stopPropagation();pageMenu(t,+t.dataset.pgm);return}
   if(t.dataset.lt){if(t.dataset.lt==='ai'){toggleAI(true);return}if(UI.ai){UI.ai=false;dock()}UI.ltab=t.dataset.lt;document.querySelectorAll('[data-lt]').forEach(b=>b.classList.toggle('on',b===t));layers();return}
   const pg=t.closest('[data-pg]');if(pg){const i=+pg.dataset.pg;if(i!==D.cur){D.cur=i;UI.sel=[];refresh(false);zoomFit()}return}
@@ -1577,9 +1585,10 @@ function applyProps(n,p){const ignored=[];const ok=['sizeH','sizeV','minW','maxW
     if(['fill','stroke'].includes(k)&&!/^#[0-9a-f]{6}$/i.test(String(v))){ignored.push(k+' (use #RRGGBB)');continue}
     if(k==='w'){w=Number(v);hasW=isFinite(w);continue}if(k==='h'){h=Number(v);hasH=isFinite(h);continue}
     if(k==='auto'&&v&&typeof v==='object'){n.auto=Object.assign(defaultsFor('auto'),n.auto||{},v,{on:v.on!==false});continue}
-    if(k==='shadow'&&v&&typeof v==='object'){n.shadow=Object.assign(defaultsFor('shadow'),n.shadow||{},v,{on:v.on!==false});continue}
+    if(k==='shadow'&&v&&typeof v==='object'){n.shadow=Object.assign(defaultsFor('shadow'),n.shadow||{},v,{on:v.on!==false});n.shadow.c=C(n.shadow.c);['x','y','b','o'].forEach(q=>{n.shadow[q]=isFinite(+n.shadow[q])?+n.shadow[q]:0});continue}
     if(k==='fill'){n.style=null;n.fillOn=true}
     if(k==='stroke')n.strokeOn=true;
+    if(k==='grad'&&v&&typeof v==='object'){n.grad={on:!!v.on,c2:C(v.c2),angle:+v.angle||0};continue}
     n[k]=v}
   if(n.type==='text'){if(hasW){n.fixedW=true;n.w=Math.max(1,w)}measure(n)}else if((hasW||hasH)&&(w!==n.w||h!==n.h)){setSize(n,Math.max(1,w),Math.max(1,h));if(n.auto&&n.auto.on){splitHug(n.auto);if(hasW)n.auto.hugW=false;if(hasH)n.auto.hugH=false}}return ignored}
 function buildNode(spec){
@@ -1603,7 +1612,7 @@ const aiTools=()=>[
     inputSchema:{type:'object',properties:{parentId:{type:'string'},layers:{type:'array',items:{type:'object'}}},required:['layers']},
     execute:(inp)=>{const par=inp.parentId?N(String(inp.parentId)):null;if(inp.parentId&&(!par||!CONTAINER(par.type)||par.type==='inst'))throw new Error('parentId is not a frame or group');const ids=[];(Array.isArray(inp.layers)?inp.layers:[]).forEach(s=>{const n=buildNode(s||{});listOf(par).push(n);ids.push(n.id)});UI.sel=ids;refresh();aiPush('t',`＋ Created ${ids.length} layer${ids.length===1?'':'s'}`);const f=ids.map(N).filter(Boolean);if(f.length&&!par)zoomFit(f);return{ids}}},
   {name:'delete_layers',description:'Delete layers by id. Returns how many were deleted.',inputSchema:{type:'object',properties:{ids:{type:'array',items:{type:'string'}}},required:['ids']},
-    execute:(inp)=>{let k=0;(inp.ids||[]).forEach(id=>{const a=ALL[String(id)];if(a&&!inInst(a.n)){a.list.splice(a.list.indexOf(a.n),1);rebuildIdx();k++}});UI.sel=UI.sel.filter(i=>ALL[i]);refresh();aiPush('t',`Deleted ${k} layer${k===1?'':'s'}`);return{deleted:k}}},
+    execute:(inp)=>{let k=0;const gone=new Set();(inp.ids||[]).forEach(id=>{const a=ALL[String(id)];if(a&&!inInst(a.n)){(function f(x){gone.add(x.id);x.children.forEach(f)})(a.n);a.list.splice(a.list.indexOf(a.n),1);rebuildIdx();k++}});Object.values(ALL).forEach(({n})=>{if(n.link&&gone.has(n.link))n.link=null;if(n.type==='inst'&&gone.has(n.master))n.type='frame'});UI.sel=UI.sel.filter(i=>ALL[i]);refresh();aiPush('t',`Deleted ${k} layer${k===1?'':'s'}`);return{deleted:k}}},
   {name:'select_layers',description:'Select layers on the canvas and zoom to them, to show the person something.',inputSchema:{type:'object',properties:{ids:{type:'array',items:{type:'string'}}},required:['ids']},
     execute:(inp)=>{const ids=(inp.ids||[]).map(String).filter(id=>ALL[id]&&ALL[id].pi===D.cur);select(ids);const ns=ids.map(N);if(ns.length)zoomFit(ns);return{selected:ids.length}}},
   {name:'add_page',description:'Add a new page to the file and switch to it. Returns the page name.',inputSchema:{type:'object',properties:{name:{type:'string'}},required:['name']},

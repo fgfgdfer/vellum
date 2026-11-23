@@ -124,11 +124,11 @@ function mcpEntry() {
 ipcMain.handle('claude:connect', () => {
   const p = claudeConfigPath();
   let cfg = {};
-  try { if (fs.existsSync(p)) cfg = JSON.parse(fs.readFileSync(p, 'utf8')); } catch (e) { return { ok: false, error: 'Claude Desktop settings file could not be read: ' + e.message }; }
+  try { if (fs.existsSync(p)) cfg = JSON.parse(fs.readFileSync(p, 'utf8')); if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) return { ok: false, error: 'Claude Desktop settings file has an unexpected format' }; } catch (e) { return { ok: false, error: 'Claude Desktop settings file could not be read: ' + e.message }; }
   cfg.mcpServers = cfg.mcpServers || {};
   cfg.mcpServers.vellum = mcpEntry();
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  if (fs.existsSync(p)) fs.copyFileSync(p, p + '.before-vellum');
+  if (fs.existsSync(p) && !fs.existsSync(p + '.before-vellum')) fs.copyFileSync(p, p + '.before-vellum');
   fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
   return { ok: true, path: p };
 });
@@ -172,6 +172,7 @@ ipcMain.handle('ai:models', async (e, id) => {
 });
 // conv: provider-neutral transcript [{role:'user'|'assistant'|'tool', text, toolCalls:[{id,name,input}], results:[{id,name,content}]}]
 ipcMain.handle('ai:chat', async (e, req) => {
+  if (!req || typeof req !== 'object') return { error: 'Bad request' };
   const p = PROVIDERS[req.provider]; if (!p) return { error: 'Unknown model provider' };
   const k = readKeys()[req.provider] || {}; if (!p.noKey && !k.key) return { error: 'Add an API key for ' + p.name + ' first (AI models settings).' };
   if (!req || !Array.isArray(req.conv) || JSON.stringify(req).length > 40e6) return { error: 'Request too large' };
