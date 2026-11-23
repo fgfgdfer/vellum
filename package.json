@@ -9,7 +9,7 @@
   "scripts": {
     "sync-web": "node scripts/sync-web.js",
     "start": "electron .",
-    "pack:win": "electron-packager . Vellum --platform=win32 --arch=x64 --out=dist --overwrite --ignore=\"^/dist\" --ignore=\"^/scripts\" --app-version=0.4.0",
+    "pack:win": "electron-packager . Vellum --platform=win32 --arch=x64 --out=dist --overwrite --ignore=\"^/dist\" --ignore=\"^/scripts\" --icon=build/icon.ico --app-version=0.4.0",
     "dist:win": "electron-builder --win nsis --x64 --publish never"
   },
   "dependencies": {
@@ -36,13 +36,15 @@
       "main.js",
       "mcp-server.mjs",
       "package.json",
-      "preload.js"
+      "preload.js",
+      "build/icon.png"
     ],
     "win": {
       "target": [
         "nsis"
       ],
-      "artifactName": "Vellum-Setup-${version}.${ext}"
+      "artifactName": "Vellum-Setup-${version}.${ext}",
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": true,

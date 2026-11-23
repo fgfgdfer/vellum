@@ -252,10 +252,16 @@ function startUpdates() {
 /* ---------- window ---------- */
 function createWindow() {
   win = new BrowserWindow({
+    icon: path.join(__dirname, 'build', 'icon.png'), title: 'Vellum',
     width: 1440, height: 900, minWidth: 900, minHeight: 600, title: 'Vellum', backgroundColor: '#1e1e1e', autoHideMenuBar: true,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: true }
   });
   win.loadFile(path.join(__dirname, 'app', 'index.html'));
+  // if the page crashes (for example while opening a very large file), keep a log and reload instead of closing the window
+  win.webContents.on('render-process-gone', (e, details) => {
+    try { fs.appendFileSync(path.join(app.getPath('userData'), 'crash.log'), new Date().toISOString() + ' ' + JSON.stringify(details) + '\n'); } catch (err) { }
+    if (details.reason !== 'clean-exit' && !win.isDestroyed()) setTimeout(() => { try { win.loadFile(path.join(__dirname, 'app', 'index.html')); } catch (err) { } }, 300);
+  });
   // the window only ever shows the editor: links open in the browser, dropped files never replace the page
   win.webContents.on('will-navigate', (e, url) => { e.preventDefault(); if (/^https?:/.test(url)) shell.openExternal(url); });
   win.webContents.setWindowOpenHandler(({ url }) => { if (/^https?:/.test(url)) shell.openExternal(url); return { action: 'deny' }; });

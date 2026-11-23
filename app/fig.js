@@ -216,10 +216,22 @@
     return { doc: { app: 'Vellum', format: 'vellum-doc', version: 1, source: 'figma-file', name: doc.name || 'Figma file', seq: SEQ + 1, cur: 0, mode: 'light', styles: [], tstyles: [], comments: [], pages }, warnings: [...WARN], stats };
   }
 
+  /* read the uncompressed size from the zip directory before inflating anything */
+  function zipEntrySizes(u) {
+    const dv = new DataView(u.buffer, u.byteOffset, u.byteLength); let e = -1;
+    for (let i = u.length - 22; i >= Math.max(0, u.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { e = i; break; }
+    if (e < 0) return null; const count = dv.getUint16(e + 10, true); let o = dv.getUint32(e + 16, true); const out = {};
+    for (let k = 0; k < count && o + 46 <= u.length; k++) { if (dv.getUint32(o, true) !== 0x02014b50) break;
+      const size = dv.getUint32(o + 24, true), nl = dv.getUint16(o + 28, true), xl = dv.getUint16(o + 30, true), cl = dv.getUint16(o + 32, true);
+      out[td.decode(u.subarray(o + 46, o + 46 + nl))] = size; o += 46 + nl + xl + cl; }
+    return out;
+  }
+  const MAX_CANVAS = 400 * 1048576;
   function parse(buf) {
     let u = buf instanceof Uint8Array ? buf : new Uint8Array(buf); const images = {}; let name = '';
     if (isZip(u)) {
       if (!window.fflate) throw new Error('zip support is missing');
+      const sizes = zipEntrySizes(u); if (sizes && sizes['canvas.fig'] > MAX_CANVAS) throw new Error('This Figma file is too large to open here (over 400 MB of data). Split it into smaller files or export pages from Figma.');
       const files = window.fflate.unzipSync(u, { filter: f => f.name === 'canvas.fig' || f.name === 'meta.json' || /^images\//.test(f.name) });
       for (const k in files) if (/^images\//.test(k)) images[k.slice(7).replace(/\.[a-z]+$/i, '')] = files[k];
       try { if (files['meta.json']) name = JSON.parse(td.decode(files['meta.json'])).file_name || ''; } catch (e) { }
