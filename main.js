@@ -269,7 +269,8 @@ function createWindow() {
     if (closing) return;
     e.preventDefault();
     const flush = win.webContents.executeJavaScript('window.__vellumFlush ? window.__vellumFlush() : null', true).catch(() => {});
-    Promise.race([flush, new Promise(r => setTimeout(r, 3000))]).finally(() => { closing = true; try { writeNow(); } catch (e) {} win.close(); });
+    // wait for the last save to reach disk (up to 15 s) before closing, so a quick edit is never dropped
+    Promise.race([flush, new Promise(r => setTimeout(r, 15000))]).finally(() => { closing = true; try { writeNow(); } catch (e) {} win.close(); });
   });
 }
 app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
