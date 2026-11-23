@@ -1,4 +1,6 @@
 name: Build Windows installer
+# Push a tag such as v0.4.0 to build the installer and publish a release.
+# Installed copies of Vellum check these releases and update themselves.
 on:
   push:
     tags: ['v*']
@@ -15,13 +17,20 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run dist:win
+      - name: Build and publish the installer with update info
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          npx electron-builder --win nsis
+          --publish ${{ startsWith(github.ref, 'refs/tags/') && 'always' || 'never' }}
+          -c.publish.provider=github
+          -c.publish.owner=${{ github.repository_owner }}
+          -c.publish.repo=${{ github.event.repository.name }}
+          -c.publish.releaseType=release
       - uses: actions/upload-artifact@v4
         with:
           name: Vellum-Windows-installer
-          path: dist/*.exe
-      - name: Attach installer to the release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*.exe
+          path: |
+            dist/*.exe
+            dist/latest.yml

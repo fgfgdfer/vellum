@@ -85,6 +85,10 @@ function listFiles() {
   return rows('SELECT id,name,updated,created,folder,star,trashed,thumb FROM files').map(r => ({ ...r, star: !!r.star, trashed: !!r.trashed, folder: r.folder || null }));
 }
 
+/* Security: every bridge call must come from Vellum's own page, never from another frame or a navigated page */
+const APP_PAGE = () => require('url').pathToFileURL(path.join(__dirname, 'app', 'index.html')).href;
+const _handle = ipcMain.handle.bind(ipcMain);
+ipcMain.handle = (ch, fn) => _handle(ch, (e, ...a) => { const u = e.senderFrame && e.senderFrame.url; if (!u || u.split('#')[0].split('?')[0] !== APP_PAGE() || (win && e.sender !== win.webContents)) throw new Error('Blocked: request did not come from Vellum'); return fn(e, ...a); });
 ipcMain.handle('db:list', () => listFiles());
 ipcMain.handle('db:load', (e, id) => (rows('SELECT json FROM files WHERE id=?', [String(id)])[0] || {}).json || null);
 ipcMain.handle('db:save', (e, id, json, rec) => {
@@ -99,7 +103,8 @@ ipcMain.handle('db:flush', () => { writeNow(); return true; });
 
 /* ---------- files, fonts, Claude connection ---------- */
 ipcMain.handle('file:save', async (e, name, data) => {
-  const r = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('documents'), String(name)) });
+  const safe = path.basename(String(name || 'export')).replace(/[<>:"|?*\x00-\x1f]/g, '_').slice(0, 120) || 'export';
+  const r = await dialog.showSaveDialog(win, { defaultPath: path.join(app.getPath('documents'), safe) });
   if (r.canceled || !r.filePath) return false;
   fs.writeFileSync(r.filePath, typeof data === 'string' ? data : Buffer.from(data));
   return true;
@@ -135,6 +140,74 @@ ipcMain.handle('claude:codeCommand', () => {
     : `claude mcp add vellum --scope user -e ELECTRON_RUN_AS_NODE=1 -- ${q(e.command)} ${q(e.args[0])}`;
 });
 
+/* ---------- AI models: Claude, Gemini, Grok, GPT, OpenRouter and local models, with your own keys ---------- */
+const { safeStorage, net } = require('electron');
+const PROVIDERS = {
+  anthropic: { name: 'Claude (API key)', kind: 'anthropic', base: 'https://api.anthropic.com/v1', model: 'claude-sonnet-5-5' },
+  openai: { name: 'GPT (OpenAI)', kind: 'openai', base: 'https://api.openai.com/v1', model: 'gpt-5' },
+  gemini: { name: 'Gemini (Google)', kind: 'openai', base: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-2.5-pro' },
+  xai: { name: 'Grok (xAI)', kind: 'openai', base: 'https://api.x.ai/v1', model: 'grok-4' },
+  openrouter: { name: 'OpenRouter (any model)', kind: 'openai', base: 'https://openrouter.ai/api/v1', model: 'anthropic/claude-sonnet-4.5' },
+  ollama: { name: 'Local model (Ollama)', kind: 'openai', base: 'http://127.0.0.1:11434/v1', model: 'llama3.1', noKey: true }
+};
+function localBase(u) { try { const x = new URL(String(u)); if (!/^https?:$/.test(x.protocol)) return null; const h = x.hostname.replace(/^\[|\]$/g, '');
+  if (h === 'localhost' || h === '::1' || /^127\./.test(h) || /^10\./.test(h) || /^192\.168\./.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h) || /\.local$/.test(h)) return x.origin + x.pathname.replace(/\/+$/, ''); } catch (e) { } return null; }
+const keysPath = () => path.join(app.getPath('userData'), 'ai-keys.json');
+function readKeys() { try { const raw = JSON.parse(fs.readFileSync(keysPath(), 'utf8')); const out = {}; for (const k in raw) { try { out[k] = { ...raw[k], key: raw[k].key ? (safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(Buffer.from(raw[k].key, 'base64')) : Buffer.from(raw[k].key, 'base64').toString()) : '' }; } catch (e) { } } return out; } catch (e) { return {}; } }
+function writeKeys(all) { const raw = {}; for (const k in all) raw[k] = { ...all[k], key: all[k].key ? (safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(all[k].key) : Buffer.from(all[k].key)).toString('base64') : '' }; fs.writeFileSync(keysPath(), JSON.stringify(raw), { mode: 0o600 }); try { fs.chmodSync(keysPath(), 0o600); } catch (e) { } }
+ipcMain.handle('ai:status', () => { const k = readKeys(); return Object.entries(PROVIDERS).map(([id, p]) => ({ id, name: p.name, defaultModel: p.model, model: (k[id] && k[id].model) || p.model, base: (k[id] && k[id].base) || p.base, configured: !!(k[id] && (k[id].key || (p.noKey && k[id].enabled))), noKey: !!p.noKey })); });
+ipcMain.handle('ai:save', (e, id, cfg) => { if (!PROVIDERS[id]) return false; const all = readKeys(); const cur = all[id] || {}; all[id] = { key: cfg.key != null ? String(cfg.key) : cur.key || '', model: String(cfg.model || cur.model || PROVIDERS[id].model), base: PROVIDERS[id].noKey ? (localBase(cfg.base || cur.base) || PROVIDERS[id].base) : PROVIDERS[id].base, enabled: cfg.enabled !== false }; if (cfg.remove) delete all[id]; writeKeys(all); return true; });
+async function httpJSON(url, opts) {
+  const res = await fetch(url, { ...opts, signal: AbortSignal.timeout(180000) });
+  const txt = await res.text(); let j = null; try { j = JSON.parse(txt); } catch (e) { }
+  if (!res.ok) { const msg = (j && (j.error && (j.error.message || j.error) || j.message)) || txt.slice(0, 300); const err = new Error(typeof msg === 'string' ? msg : JSON.stringify(msg)); err.status = res.status; throw err; }
+  return j;
+}
+ipcMain.handle('ai:models', async (e, id) => {
+  const p = PROVIDERS[id]; const k = readKeys()[id] || {}; if (!p) return [];
+  try {
+    if (p.kind === 'anthropic') { const j = await httpJSON(p.base + '/models', { headers: { 'x-api-key': k.key, 'anthropic-version': '2023-06-01' } }); return (j.data || []).map(m => m.id); }
+    const j = await httpJSON((k.base || p.base) + '/models', { headers: k.key ? { Authorization: 'Bearer ' + k.key } : {} }); return (j.data || j.models || []).map(m => m.id || m.name).filter(Boolean).slice(0, 300);
+  } catch (err) { return { error: err.message }; }
+});
+// conv: provider-neutral transcript [{role:'user'|'assistant'|'tool', text, toolCalls:[{id,name,input}], results:[{id,name,content}]}]
+ipcMain.handle('ai:chat', async (e, req) => {
+  const p = PROVIDERS[req.provider]; if (!p) return { error: 'Unknown model provider' };
+  const k = readKeys()[req.provider] || {}; if (!p.noKey && !k.key) return { error: 'Add an API key for ' + p.name + ' first (AI models settings).' };
+  if (!req || !Array.isArray(req.conv) || JSON.stringify(req).length > 40e6) return { error: 'Request too large' };
+  const model = String(req.model || k.model || p.model).slice(0, 200); const tools = Array.isArray(req.tools) ? req.tools.slice(0, 40) : [];
+  try {
+    if (p.kind === 'anthropic') {
+      const messages = [];
+      for (const m of req.conv) {
+        if (m.role === 'user') messages.push({ role: 'user', content: (m.images || []).length ? [...m.images.map(u => { const mm = /^data:([^;]+);base64,(.*)$/.exec(u) || []; return { type: 'image', source: { type: 'base64', media_type: mm[1] || 'image/png', data: mm[2] || '' } }; }), { type: 'text', text: m.text || '(empty)' }] : (m.text || '(empty)') });
+        else if (m.role === 'assistant') messages.push({ role: 'assistant', content: [...(m.text ? [{ type: 'text', text: m.text }] : []), ...(m.toolCalls || []).map(t => ({ type: 'tool_use', id: t.id, name: t.name, input: t.input || {} }))].concat(!m.text && !(m.toolCalls || []).length ? [{ type: 'text', text: '(no reply)' }] : []) });
+        else if (m.role === 'tool') messages.push({ role: 'user', content: m.results.map(r => ({ type: 'tool_result', tool_use_id: r.id, content: r.content })) });
+      }
+      const j = await httpJSON(p.base + '/messages', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': k.key, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model, max_tokens: 8192, system: req.system, messages, tools: tools.map(t => ({ name: t.name, description: t.description, input_schema: t.schema || { type: 'object', properties: {} } })) }) });
+      const text = (j.content || []).filter(c => c.type === 'text').map(c => c.text).join('\n');
+      const toolCalls = (j.content || []).filter(c => c.type === 'tool_use').map(c => ({ id: c.id, name: c.name, input: c.input }));
+      return { text, toolCalls, model: j.model || model };
+    }
+    const messages = [{ role: 'system', content: req.system }];
+    for (const m of req.conv) {
+      if (m.role === 'user') messages.push({ role: 'user', content: (m.images || []).length ? [{ type: 'text', text: m.text || '(empty)' }, ...m.images.map(u => ({ type: 'image_url', image_url: { url: u } }))] : (m.text || '(empty)') });
+      else if (m.role === 'assistant') messages.push({ role: 'assistant', content: m.text || null, ...((m.toolCalls || []).length ? { tool_calls: m.toolCalls.map(t => ({ id: t.id, type: 'function', function: { name: t.name, arguments: JSON.stringify(t.input || {}) } })) } : {}) });
+      else if (m.role === 'tool') m.results.forEach(r => messages.push({ role: 'tool', tool_call_id: r.id, content: r.content }));
+    }
+    const headers = { 'content-type': 'application/json', ...(k.key ? { Authorization: 'Bearer ' + k.key } : {}) };
+    if (req.provider === 'openrouter') { headers['HTTP-Referer'] = 'https://vellum.local'; headers['X-Title'] = 'Vellum'; }
+    const j = await httpJSON((k.base || p.base) + '/chat/completions', { method: 'POST', headers, body: JSON.stringify({ model, messages, ...(tools.length ? { tools: tools.map(t => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.schema || { type: 'object', properties: {} } } })) } : {}) }) });
+    const msg = (j.choices && j.choices[0] && j.choices[0].message) || {};
+    const toolCalls = (msg.tool_calls || []).map((t, i) => { let input = {}; try { input = JSON.parse(t.function.arguments || '{}'); } catch (e) { } return { id: t.id || ('call_' + Date.now() + '_' + i), name: t.function.name, input }; });
+    return { text: typeof msg.content === 'string' ? msg.content : Array.isArray(msg.content) ? msg.content.map(c => c.text || '').join('') : '', toolCalls, model: j.model || model };
+  } catch (err) {
+    const s = err.status; const hint = !s && req.provider === 'ollama' ? 'Could not reach the local model server. Is Ollama running?' : !s ? 'Could not reach ' + p.name + '. Check the internet connection.' : s === 401 || s === 403 ? 'The API key was rejected.' : s === 429 ? 'Rate limit or out of credits/tokens for this model. Switch to another model in the chat and continue.' : s === 404 ? 'Model not found. Pick another model name.' : '';
+    return { error: (hint ? hint + ' ' : '') + err.message, status: s };
+  }
+});
+
 /* ---------- local command port used by the MCP connector (127.0.0.1 only, token protected) ---------- */
 function startCommandPort() {
   const token = crypto.randomBytes(24).toString('hex');
@@ -158,9 +231,22 @@ function startCommandPort() {
   server.listen(0, '127.0.0.1', () => {
     const port = server.address().port;
     fs.writeFileSync(path.join(app.getPath('userData'), 'mcp.json'), JSON.stringify({ port, token, pid: process.pid }), { mode: 0o600 });
+    try { fs.chmodSync(path.join(app.getPath('userData'), 'mcp.json'), 0o600); } catch (e) { }
   });
 }
-ipcMain.on('vellum-cmd-result', (e, r) => { const f = pending.get(r.id); if (f) { pending.delete(r.id); f(r); } });
+ipcMain.on('vellum-cmd-result', (e, r) => { if (!win || e.sender !== win.webContents || !r) return; const f = pending.get(r.id); if (f) { pending.delete(r.id); f(r); } });
+
+/* ---------- automatic updates: installed copies download new versions from the GitHub releases and install them on restart ---------- */
+function startUpdates() {
+  if (!app.isPackaged) return;
+  let au; try { au = require('electron-updater').autoUpdater; } catch (e) { return; }
+  au.autoDownload = true; au.autoInstallOnAppQuit = true;
+  au.on('update-downloaded', info => { if (win && !win.isDestroyed()) win.webContents.send('vellum-update', { version: info.version }); });
+  au.on('error', () => { });
+  const check = () => au.checkForUpdates().catch(() => { });
+  setTimeout(check, 8000); setInterval(check, 4 * 3600 * 1000);
+  ipcMain.handle('update:install', () => { au.quitAndInstall(false, true); return true; });
+}
 
 /* ---------- window ---------- */
 function createWindow() {
@@ -186,6 +272,7 @@ app.whenReady().then(async () => {
   session.defaultSession.setPermissionCheckHandler((wc, perm) => ['clipboard-read', 'clipboard-sanitized-write', 'local-fonts', 'fullscreen'].includes(perm));
   await openDb();
   startCommandPort();
+  startUpdates();
   createWindow();
 });
 app.on('window-all-closed', () => { try { writeNow(); } catch (e) {} app.quit(); });

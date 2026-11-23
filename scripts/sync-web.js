@@ -12,7 +12,7 @@ ${body}
 fs.mkdirSync(path.join(__dirname, '..', 'app'), { recursive: true });
 // libraries the editor loads next to itself: geometry (booleans) and the icon library
 const dir = path.dirname(src);
-for (const f of ['paper-core.min.js', 'LICENSE-lucide.txt']) { if (fs.existsSync(path.join(dir, f))) fs.copyFileSync(path.join(dir, f), path.join(__dirname, '..', 'app', f)); }
+for (const f of ['paper-core.min.js', 'LICENSE-lucide.txt', 'fflate.min.js', 'fzstd.min.js', 'fig.js', 'LICENSE-fflate.txt', 'LICENSE-fzstd.txt']) { if (fs.existsSync(path.join(dir, f))) fs.copyFileSync(path.join(dir, f), path.join(__dirname, '..', 'app', f)); }
 if (fs.existsSync(path.join(dir, 'icons.json'))) fs.writeFileSync(path.join(__dirname, '..', 'app', 'icons.js'), 'window.__ICONS=' + fs.readFileSync(path.join(dir, 'icons.json'), 'utf8') + ';');
 fs.writeFileSync(path.join(__dirname, '..', 'app', 'index.html'), html);
 console.log('app/index.html written from', src);

@@ -13,7 +13,13 @@ contextBridge.exposeInMainWorld('vellum', {
   saveFile: (name, data) => ipcRenderer.invoke('file:save', name, data),
   fonts: () => ipcRenderer.invoke('fonts:list'),
   connectClaude: () => ipcRenderer.invoke('claude:connect'),
+  aiStatus: () => ipcRenderer.invoke('ai:status'),
+  aiSave: (id, cfg) => ipcRenderer.invoke('ai:save', id, cfg),
+  aiModels: id => ipcRenderer.invoke('ai:models', id),
+  aiChat: req => ipcRenderer.invoke('ai:chat', req),
   claudeCodeCommand: () => ipcRenderer.invoke('claude:codeCommand'),
+  onUpdate: fn => ipcRenderer.on('vellum-update', (e, info) => fn(info)),
+  installUpdate: () => ipcRenderer.invoke('update:install'),
   onCommand: fn => {
     ipcRenderer.on('vellum-cmd', async (e, msg) => {
       try { const result = await fn(msg.tool, msg.args || {}); ipcRenderer.send('vellum-cmd-result', { id: msg.id, ok: true, result }); }

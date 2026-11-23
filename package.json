@@ -1,7 +1,7 @@
 {
   "name": "vellum",
   "productName": "Vellum",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "description": "Vellum: interface design editor",
   "main": "main.js",
   "license": "UNLICENSED",
@@ -9,11 +9,12 @@
   "scripts": {
     "sync-web": "node scripts/sync-web.js",
     "start": "electron .",
-    "pack:win": "electron-packager . Vellum --platform=win32 --arch=x64 --out=dist --overwrite --ignore=\"^/dist\" --ignore=\"^/scripts\" --app-version=0.1.0",
+    "pack:win": "electron-packager . Vellum --platform=win32 --arch=x64 --out=dist --overwrite --ignore=\"^/dist\" --ignore=\"^/scripts\" --app-version=0.4.0",
     "dist:win": "electron-builder --win nsis --x64 --publish never"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
+    "electron-updater": "^6.3.9",
     "font-list": "^1.5.1",
     "sql.js": "^1.12.0",
     "zod": "^4.6.7"
@@ -31,22 +32,22 @@
       "output": "dist"
     },
     "files": [
-      "main.js",
-      "preload.js",
-      "mcp-server.mjs",
       "app/**",
-      "package.json"
+      "main.js",
+      "mcp-server.mjs",
+      "package.json",
+      "preload.js"
     ],
     "win": {
-      "target": "nsis",
+      "target": [
+        "nsis"
+      ],
       "artifactName": "Vellum-Setup-${version}.${ext}"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Vellum"
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false
     }
   }
 }
